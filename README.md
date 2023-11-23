@@ -33,4 +33,5 @@ This project was generated from [@cjolowicz]'s [Hypermodern Python Cookiecutter]
 [hypermodern python cookiecutter]: https://github.com/cjolowicz/cookiecutter-hypermodern-python
 
 <!-- github-only -->
+
 [license]: https://github.com/DiogenesAnalytics/frame-sampling/blob/main/LICENSE
