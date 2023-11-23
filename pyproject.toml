@@ -16,7 +16,10 @@ Changelog = "https://github.com/DiogenesAnalytics/frame-sampling/releases"
 
 [tool.poetry.dependencies]
 python = "^3.9"
+av = ">=11.0.0"
 click = ">=8.0.1"
+pillow = ">=10.1.0"
+tqdm = ">=4.66.1"
 
 [tool.poetry.group.dev]
 optional = true
@@ -33,6 +36,7 @@ flake8-rst-docstrings = ">=0.2.5"
 furo = ">=2021.11.12"
 isort = ">=5.10.1"
 mypy = ">=0.930"
+myst-parser = {version = ">=0.16.1"}
 nox = ">=2023.4.22"
 nox-poetry = ">=1.0.3"
 pep8-naming = ">=0.12.1"
@@ -41,8 +45,9 @@ pre-commit-hooks = ">=4.1.0"
 pytest = ">=6.2.5"
 pyupgrade = ">=2.29.1"
 typeguard = ">=2.13.3"
+types-pillow = ">=10.1.0.2"
+types-tqdm = ">=4.66.0.4"
 xdoctest = {extras = ["colors"], version = ">=0.15.10"}
-myst-parser = {version = ">=0.16.1"}
 
 [tool.poetry.scripts]
 frame-sampling = "frame_sampling.__main__:main"
@@ -70,6 +75,10 @@ warn_unreachable = true
 pretty = true
 show_column_numbers = true
 show_error_context = true
+
+[[tool.mypy.overrides]]
+module = ["av.*"]
+ignore_missing_imports = true
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
