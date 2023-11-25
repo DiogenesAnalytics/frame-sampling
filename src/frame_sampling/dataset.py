@@ -44,8 +44,8 @@ class Dataset(ABC):
         assert self._data_path.exists()
 
     def _get_filepaths(self) -> Generator[Path, None, None]:
-        """Scan file system for video files and grab their file paths."""
-        # iterate over video file extensions
+        """Scan target directory for file extensions and grab their file paths."""
+        # iterate target file extensions
         for ext in self.file_extensions:
             # loop through video paths matching ext
             yield from self._data_path.glob(f"**/{ext}")
