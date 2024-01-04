@@ -29,8 +29,13 @@ class BaseSampler(ABC):
         pass
 
     @abstractmethod
-    def _create_frame_sample_sub_dir(self, output_dir: Path, idx: int) -> Path:
-        """Defines how the sample sub directory should be generated."""
+    def _create_subdir_path(self, output_dir: Path, idx: int) -> Path:
+        """Defines how the sample sub directory path should be named."""
+        pass
+
+    @abstractmethod
+    def _handle_exceptions(self, error: BaseException, video_path: Path) -> None:
+        """Defines how to handle any exceptions while sampling frames."""
         pass
 
     @property
@@ -39,7 +44,9 @@ class BaseSampler(ABC):
         """Defines number of seconds to delay progress bar for frame iteration."""
         pass
 
-    def sample(self, video_dataset: VideoDataset, output_dir: Path) -> None:
+    def sample(
+        self, video_dataset: VideoDataset, output_dir: Path, exist_ok: bool = False
+    ) -> None:
         """Loop through frames and store based on certain criteria."""
         # notify of sampling
         print(f"Sampling frames at every {self.sample_rate} frames ...")
@@ -47,7 +54,7 @@ class BaseSampler(ABC):
         # iterate over video files in video data directory
         for video_idx, video_path in enumerate(tqdm(video_dataset)):
             # create frame samples sub directory
-            sample_sub_dir = self._create_frame_sample_sub_dir(output_dir, video_idx)
+            sample_subdir = self._create_subdir_path(output_dir, video_idx)
 
             # open video file for streaming
             with av.open(str(video_path)) as container:
@@ -55,25 +62,54 @@ class BaseSampler(ABC):
                 stream = container.streams.video[0]
 
                 # get shortened name
-                if len(video_path.name) > 30:
-                    short_name = video_path.name[:30] + "(...)" + video_path.suffix
+                if len(video_path.stem) > 30:
+                    # calculate ammount to chop
+                    chop = 30 - len(video_path.suffix)
+
+                    # rename
+                    short_name = video_path.stem[:chop] + "(...)" + video_path.suffix
+
                 else:
+                    # keep name
                     short_name = video_path.name
 
-                # creating tqdm-wrapped video stream
-                video_stream = tqdm(
-                    container.decode(stream),
-                    desc=f"Sampling {short_name}",
-                    leave=False,
-                    delay=self.iter_frames_progress_delay,
+                # creating tqdm-wrapped iterable video stream
+                video_stream = iter(
+                    enumerate(
+                        tqdm(
+                            container.decode(stream),
+                            desc=f"Sampling {short_name}",
+                            leave=False,
+                            delay=self.iter_frames_progress_delay,
+                        )
+                    )
                 )
 
-                # iterate frames
-                for frame_idx, frame in enumerate(video_stream):
-                    # check for frame criteria
-                    if self._sample_criteria(frame_idx, frame):
-                        # write frame to disk
-                        self._save_frame(sample_sub_dir, frame)
+                # check if frames sample sub dir exists
+                if exist_ok or not sample_subdir.exists():
+                    # create sub dir
+                    sample_subdir.mkdir(parents=True, exist_ok=exist_ok)
+
+                    # begin frame sample loop
+                    while True:
+                        # catch errors
+                        try:
+                            # get next frame id/sample pair
+                            frame_idx, frame = next(video_stream)
+
+                            # check for frame criteria
+                            if self._sample_criteria(frame_idx, frame):
+                                # write frame to disk
+                                self._save_frame(sample_subdir, frame)
+
+                        except StopIteration:
+                            # end of the iterable
+                            break
+
+                        # if error ...
+                        except BaseException as error:
+                            # ... handle it
+                            self._handle_exceptions(error, video_path)
 
 
 class MinimalSampler(BaseSampler):
@@ -81,14 +117,14 @@ class MinimalSampler(BaseSampler):
 
     iter_frames_progress_delay = 2
 
-    def _create_frame_sample_sub_dir(self, output_dir: Path, idx: int) -> Path:
+    def _handle_exceptions(self, error: BaseException, video_path: Path) -> None:
+        """Pass on all exceptions and continue sampling frames."""
+        print(f"Skipping error from {video_path.name}: {error}")
+
+    def _create_subdir_path(self, output_dir: Path, idx: int) -> Path:
         """Use index of video file from dataset as name of sub directory."""
         # create new sub directory from video dataset index
-        sub_dir = output_dir / str(idx)
-        sub_dir.mkdir(parents=True)
-
-        # return path to new sub dir
-        return sub_dir
+        return output_dir / str(idx)
 
     def _sample_criteria(self, idx: int, frame: Image) -> bool:
         """Use sample rate and index to get modulus as a boolean."""
