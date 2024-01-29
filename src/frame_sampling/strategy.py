@@ -3,6 +3,8 @@ from abc import ABC
 from abc import abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Iterator
+from typing import Tuple
 
 import av
 from av.video.frame import VideoFrame
@@ -17,6 +19,69 @@ class BaseSampler(ABC):
     """Most fundamental abstract base class for frame samplers."""
 
     sample_rate: int
+
+    def _sample_single_video(self, video_path: Path, sample_subdir: Path) -> None:
+        """Sample frames from a single video."""
+        # open video
+        with av.open(str(video_path)) as container:
+            # get first stream (video)
+            stream = container.streams.video[0]
+
+            # get shortened name
+            video_name = self._get_shortened_name(video_path)
+
+            # create iterable with progressbar and enumeration
+            video_stream = self._create_video_stream(container, stream, video_name)
+
+            # begin processing frames
+            while True:
+                try:
+                    # get id and frame
+                    frame_idx, frame = next(video_stream)
+
+                    # decide how to process frame
+                    self._process_frame(sample_subdir, frame_idx, frame)
+
+                except StopIteration:
+                    # end of frames
+                    break
+
+                except BaseException as error:
+                    # decide how to handle exceptions
+                    self._handle_exceptions(error, video_path)
+
+    def _create_video_stream(
+        self,
+        container: av.container,
+        stream: av.video.VideoStream,
+        video_name: str,
+    ) -> Iterator[Tuple[int, av.VideoFrame]]:
+        """Create a tqdm-wrapped iterable video stream."""
+        return iter(
+            enumerate(
+                tqdm(
+                    container.decode(stream),
+                    desc=f"Sampling {video_name}",
+                    leave=False,
+                    delay=self.iter_frames_progress_delay,
+                )
+            )
+        )
+
+    def _get_shortened_name(self, video_path: Path) -> str:
+        """Get a shortened name for the video file."""
+        if len(video_path.stem) > 30:
+            chop = 30 - len(video_path.suffix)
+            return video_path.stem[:chop] + "(...)" + video_path.suffix
+        else:
+            return video_path.name
+
+    def _process_frame(
+        self, sample_subdir: Path, frame_idx: int, frame: av.VideoFrame
+    ) -> None:
+        """Process and save the frame based on certain criteria."""
+        if self._sample_criteria(frame_idx, frame):
+            self._save_frame(sample_subdir, frame)
 
     @abstractmethod
     def _sample_criteria(self, idx: int, frame: VideoFrame) -> bool:
@@ -51,65 +116,18 @@ class BaseSampler(ABC):
         # notify of sampling
         print(f"Sampling frames at every {self.sample_rate} frames ...")
 
-        # iterate over video files in video data directory
+        # loop over videos and their id
         for video_idx, video_path in enumerate(tqdm(video_dataset)):
-            # create frame samples sub directory
+            # get name of sample subdir
             sample_subdir = self._create_subdir_path(output_dir, video_idx)
 
-            # open video file for streaming
-            with av.open(str(video_path)) as container:
-                # get video stream
-                stream = container.streams.video[0]
+            # check if dir exists
+            if exist_ok or not sample_subdir.exists():
+                # create dir
+                sample_subdir.mkdir(parents=True, exist_ok=exist_ok)
 
-                # get shortened name
-                if len(video_path.stem) > 30:
-                    # calculate ammount to chop
-                    chop = 30 - len(video_path.suffix)
-
-                    # rename
-                    short_name = video_path.stem[:chop] + "(...)" + video_path.suffix
-
-                else:
-                    # keep name
-                    short_name = video_path.name
-
-                # creating tqdm-wrapped iterable video stream
-                video_stream = iter(
-                    enumerate(
-                        tqdm(
-                            container.decode(stream),
-                            desc=f"Sampling {short_name}",
-                            leave=False,
-                            delay=self.iter_frames_progress_delay,
-                        )
-                    )
-                )
-
-                # check if frames sample sub dir exists
-                if exist_ok or not sample_subdir.exists():
-                    # create sub dir
-                    sample_subdir.mkdir(parents=True, exist_ok=exist_ok)
-
-                    # begin frame sample loop
-                    while True:
-                        # catch errors
-                        try:
-                            # get next frame id/sample pair
-                            frame_idx, frame = next(video_stream)
-
-                            # check for frame criteria
-                            if self._sample_criteria(frame_idx, frame):
-                                # write frame to disk
-                                self._save_frame(sample_subdir, frame)
-
-                        except StopIteration:
-                            # end of the iterable
-                            break
-
-                        # if error ...
-                        except BaseException as error:
-                            # ... handle it
-                            self._handle_exceptions(error, video_path)
+                # get frame samples from single video
+                self._sample_single_video(video_path, sample_subdir)
 
 
 class MinimalSampler(BaseSampler):
