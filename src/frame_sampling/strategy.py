@@ -77,7 +77,7 @@ class BaseSampler(ABC):
             return video_path.name
 
     def _process_frame(
-        self, sample_subdir: Path, frame_idx: int, frame: av.VideoFrame
+        self, sample_subdir: Path, frame_idx: int, frame: VideoFrame
     ) -> None:
         """Process and save the frame based on certain criteria."""
         if self._sample_criteria(frame_idx, frame):
@@ -144,7 +144,7 @@ class MinimalSampler(BaseSampler):
         # create new sub directory from video dataset index
         return output_dir / str(idx)
 
-    def _sample_criteria(self, idx: int, frame: Image) -> bool:
+    def _sample_criteria(self, idx: int, frame: VideoFrame) -> bool:
         """Use sample rate and index to get modulus as a boolean."""
         return not idx % self.sample_rate
 
