@@ -3,6 +3,7 @@ from abc import ABC
 from abc import abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 from typing import Iterator
 from typing import Tuple
 
@@ -135,6 +136,10 @@ class MinimalSampler(BaseSampler):
 
     iter_frames_progress_delay = 2
 
+    def default_criteria(self, idx: int) -> bool:
+        """Use sample rate and index to get modulus as a boolean."""
+        return not idx % self.sample_rate
+
     def _handle_exceptions(self, error: BaseException, video_path: Path) -> None:
         """Pass on all exceptions and continue sampling frames."""
         print(f"Skipping error from {video_path.name}: {error}")
@@ -145,8 +150,8 @@ class MinimalSampler(BaseSampler):
         return output_dir / str(idx)
 
     def _sample_criteria(self, idx: int, frame: VideoFrame) -> bool:
-        """Use sample rate and index to get modulus as a boolean."""
-        return not idx % self.sample_rate
+        """Apply default criteria for checking frame interval."""
+        return self.default_criteria(idx)
 
     def _save_frame(self, sub_dir: Path, frame: VideoFrame) -> None:
         """Simply write frame as a JPEG to sub directory."""
@@ -158,3 +163,21 @@ class MinimalSampler(BaseSampler):
 
         # save to output dir
         frame_pil.save(sub_dir / image_file_name)
+
+
+class CustomCriteriaSampler(MinimalSampler):
+    """Applies custom criteria function to determine if frame should be sampled."""
+
+    def __init__(
+        self, sample_rate: int, criteria_func: Callable[[Image], bool]
+    ) -> None:
+        """Overrides ABC constructor to add a custom criteria function."""
+        # first call abc constructor
+        super().__init__(sample_rate=sample_rate)
+
+        # now store criteria_func
+        self.criteria_func = criteria_func
+
+    def _sample_criteria(self, idx: int, frame: VideoFrame) -> bool:
+        """Apply the custom criteria function."""
+        return self.default_criteria(idx) and self.criteria_func(frame.to_image())
