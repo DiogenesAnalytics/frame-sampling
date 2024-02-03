@@ -66,6 +66,7 @@ class BaseSampler(ABC):
             enumerate(
                 tqdm(
                     container.decode(stream),
+                    total=stream.frames,
                     desc=f"Sampling {video_name}",
                     leave=False,
                     delay=self.iter_frames_progress_delay,
