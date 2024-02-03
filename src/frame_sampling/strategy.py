@@ -1,4 +1,5 @@
 """Implements entire class hierarchy for all frame samplers."""
+import logging
 import subprocess
 from abc import ABC
 from abc import abstractmethod
@@ -216,11 +217,30 @@ class VideoClipSampler(CustomCriteriaSampler):
             output_file,
         ]
 
-        # run command
-        subprocess.run(command, check=True)
+        try:
+            # log cmd before running
+            logging.info(f"FFmpeg command: {' '.join(command)}")
 
-        # Add this print statement in your _save_video_clip method
-        print(f"FFmpeg command: {' '.join(command)}")
+            # run cmd and capture output
+            result = subprocess.run(
+                command,
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+
+            # log output
+            logging.info(f"FFmpeg output:\n{result.stdout}")
+
+        except subprocess.CalledProcessError as error:
+            # log error
+            logging.error(
+                "Error running FFmpeg command: %s", " ".join(command), exc_info=True
+            )
+
+            # deal with error
+            self._handle_exceptions(error, Path(input_file))
 
     def _process_clip(
         self,
@@ -299,3 +319,23 @@ class VideoClipSampler(CustomCriteriaSampler):
                     end_time,
                     sample_subdir,
                 )
+
+    def sample(
+        self, video_dataset: VideoDataset, output_dir: Path, exist_ok: bool = False
+    ) -> None:
+        """Updated logging info before calling parent sample method."""
+        # create dir if not exist
+        output_dir.mkdir(parents=True, exist_ok=exist_ok)
+
+        # get logging file path
+        log_file_path = output_dir / "ffmpeg.log"
+
+        # configure logging
+        logging.basicConfig(
+            filename=log_file_path,
+            level=logging.INFO,
+            format="%(asctime)s - %(levelname)s - %(message)s",
+        )
+
+        # now call parent
+        super().sample(video_dataset, output_dir, exist_ok)
