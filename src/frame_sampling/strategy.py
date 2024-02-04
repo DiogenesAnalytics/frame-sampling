@@ -62,17 +62,36 @@ class BaseSampler(ABC):
         video_name: str,
     ) -> Iterator[Tuple[int, Union[VideoFrame, AudioFrame]]]:
         """Create a tqdm-wrapped iterable video/audio stream."""
-        return iter(
-            enumerate(
-                tqdm(
-                    container.decode(stream),
-                    total=stream.frames,
-                    desc=f"Sampling {video_name}",
-                    leave=False,
-                    delay=self.iter_frames_progress_delay,
-                )
-            )
+        # get initial total frames
+        total_frames = stream.frames
+
+        # create prog bar
+        progress_bar = tqdm(
+            total=total_frames,
+            desc=f"Sampling {video_name}",
+            leave=False,
+            delay=self.iter_frames_progress_delay,
         )
+
+        # loop over decoded frames
+        for i, frame in enumerate(container.decode(stream)):
+            # set new total based on which is larger
+            total_frames = max(total_frames, i + 1)
+
+            # update with new total
+            progress_bar.total = total_frames
+
+            # update progress
+            progress_bar.update(1)
+
+            # get frame_id/frame pair
+            yield i, frame
+
+        # set the progress bar's total to the actual number of frames
+        progress_bar.total = i + 1
+
+        # close progress bar to be safe
+        progress_bar.close()
 
     def _get_shortened_name(self, video_path: Path) -> str:
         """Get a shortened name for the video file."""
