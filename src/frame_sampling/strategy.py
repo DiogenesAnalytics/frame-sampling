@@ -13,6 +13,7 @@ from typing import Union
 import av
 from av.audio.frame import AudioFrame
 from av.video.frame import VideoFrame
+from ffmpeg_progress_yield import FfmpegProgress
 from PIL.Image import Image
 from tqdm.auto import tqdm
 
@@ -241,17 +242,26 @@ class VideoClipSampler(CustomCriteriaSampler):
             # log cmd before running
             logging.info(f"FFmpeg command: {' '.join(command)}")
 
-            # run cmd and capture output
-            result = subprocess.run(
-                command,
-                check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-            )
+            # setup ffmpeg progress instance
+            ff = FfmpegProgress(command)
+
+            # create description
+            prog_desc = f"Creating clip: {start_time:.2f}s -> {end_time:.2f}s"
+
+            # open tqdm
+            with tqdm(
+                total=100,
+                desc=prog_desc,
+                leave=False,
+                delay=self.iter_frames_progress_delay,
+            ) as pbar:
+                # run command
+                for progress in ff.run_command_with_progress():
+                    # update progress
+                    pbar.update(progress - pbar.n)
 
             # log output
-            logging.info(f"FFmpeg output:\n{result.stdout}")
+            logging.info(f"FFmpeg output:\n{ff.stderr}")
 
         except subprocess.CalledProcessError as error:
             # log error
