@@ -20,6 +20,7 @@ av = ">=11.0.0"
 click = ">=8.0.1"
 pillow = ">=10.1.0"
 tqdm = ">=4.66.1"
+ffmpeg-progress-yield = ">=0.7.8"
 
 [tool.poetry.group.dev]
 optional = true
