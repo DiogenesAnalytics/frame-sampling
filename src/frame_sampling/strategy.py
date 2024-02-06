@@ -152,8 +152,13 @@ class BaseSampler(ABC):
                 # create dir
                 sample_subdir.mkdir(parents=True, exist_ok=exist_ok)
 
+            try:
                 # get frame samples from single video
                 self._sample_single_video(video_path, sample_subdir)
+
+            except av.InvalidDataError as error:
+                # decide how to handle error
+                self._handle_exceptions(error, video_path)
 
 
 class MinimalSampler(BaseSampler):
